@@ -28,3 +28,5 @@ import Course.State as X
 import Course.StateT as X
 import Course.Traversable as X
 import Course.Validation as X
+
+import Course.JsParser as X
