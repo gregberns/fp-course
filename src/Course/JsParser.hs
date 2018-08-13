@@ -2,6 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RebindableSyntax #-}
+{-# language DataKinds, KindSignatures #-}
 
 module Course.JsParser where
 
@@ -15,20 +16,6 @@ import Course.Monad
 import Course.List
 import Course.Optional
 
--- var, let, const
--- doubleEqTok, tripleEqTok, semicolonTok
--- && ||
-
-jsTrue :: Parser Chars
-jsTrue = stringTok "true"
-
-jsFalse :: Parser Chars
-jsFalse = stringTok "false"
-
--- data JsExpression 
-
-  -- operator operand
-
 data ComparisonOperator =
   Equal
   | NotEqual
@@ -40,21 +27,27 @@ data ComparisonOperator =
   | LessThanOrEqual
   deriving (Eq, Ord, Show)
 
--- toComparisonOperator ::
---   Chars
---   -> Optional ComparisonOperator
--- toComparisonOperator c =
---   let table = ("==", Equal) :.
---               ("!=", NotEqual) :.
---               ("===", StrictEqual) :.
---               ("!==", StrictNotEqual) :.
---               (">", GreaterThan) :.
---               (">=", GreaterThanOrEqual) :.
---               ("<", LessThan) :.
---               ("<=" , LessThanOrEqual) :.
---               Nil
---   in snd <$> find ((==) c . fst) table
+data LogicalOperator =
+  LogicalAnd
+  | LogicalOr
+  | LogicalNot
+  deriving (Eq, Ord, Show)
 
+data Boolean =
+  JsTrue
+  | JsFalse
+  deriving (Eq, Ord, Show)
+
+
+jsTrue :: Parser Chars
+jsTrue = stringTok "true"
+
+jsFalse :: Parser Chars
+jsFalse = stringTok "false"
+
+jsBoolean :: Parser Boolean
+jsBoolean =
+  JsTrue <$ jsTrue ||| JsFalse <$ jsFalse
 
 jsEqual = stringTok "=="
 jsNotEqual = stringTok "!="
@@ -66,17 +59,65 @@ jsLessThan = stringTok "<"
 jsLessThanOrEqual = stringTok "<="
 
 jsComparisonOperator = 
-  (Equal <$ NotEqual
-  ||| NotEqual <$ jsNotEqual
-  ||| StrictEqual <$ jsStrictEqual
-  ||| StrictNotEqual <$ jsStrictNotEqual
+  spaces *> (
+    StrictNotEqual <$ jsStrictNotEqual
+    ||| StrictEqual <$ jsStrictEqual
+    ||| NotEqual <$ jsNotEqual
+    ||| Equal <$ jsEqual
+    ||| GreaterThanOrEqual <$ jsGreaterThanOrEqual
+    ||| GreaterThan <$ jsGreaterThan
+    ||| LessThanOrEqual <$ jsLessThanOrEqual
+    ||| LessThan <$ jsLessThan
   )
 
-jsExpression =
+jsLogicalAnd = stringTok "&&"
+jsLogicalOr = stringTok "||"
+jsLogicalNot = stringTok "!"
+
+jsLogicalOperator =
+  spaces *> (
+    LogicalAnd <$ jsLogicalAnd
+    ||| LogicalOr <$ jsLogicalOr
+    ||| LogicalNot <$ jsLogicalNot
+  )
+
+
+data Expr (v :: [*]) =
+  Bool Boolean
+  | String --todo
+  | UniExp LogicalOperator (Expr v)
+  | BinExp LogicalOperator (Expr v) (Expr v)
+  deriving (Eq, Ord, Show)
+
+-- parse jsExpression "!true"
+-- Result >< UniExp LogicalAnd (Bool JsTrue) (Bool JsTrue)
+jsUniExp :: Parser (Expr v)
+jsUniExp =
   do
-    b1 <- jsTrue ||| jsFalse
-    o <- jsComparisonOperator
-    b2 <- jsTrue ||| jsFalse
-    (o, b1, b2)
+    o <- jsLogicalOperator
+    b <- jsBoolean
+    pure (UniExp o (Bool b))
+  
+-- parse jsExpression "true && true"
+-- Result >< BinExp LogicalAnd (Bool JsTrue) (Bool JsTrue)
+jsBinExp :: Parser (Expr v)
+jsBinExp =
+  do
+    b1 <- jsBoolean
+    _ <- spaces
+    o <- jsLogicalOperator -- ||| jsComparisonOperator
+    _ <- spaces
+    b2 <- jsBoolean
+    pure (BinExp o (Bool b1) (Bool b2))
+
+-- jsExpression :: Parser Expr
+-- jsExpression =
+--   do
+--     b1 <- jsBoolean
+--     _ <- spaces
+--     o <- jsLogicalOperator
+--     _ <- spaces
+--     b2 <- jsBoolean
+--     pure (BinExp o (Bool b1) (Bool b2))
 
 
