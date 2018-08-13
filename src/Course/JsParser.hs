@@ -16,28 +16,27 @@ import Course.Monad
 import Course.List
 import Course.Optional
 
-data ComparisonOperator =
-  Equal
-  | NotEqual
-  | StrictEqual
-  | StrictNotEqual
-  | GreaterThan
-  | GreaterThanOrEqual
-  | LessThan
-  | LessThanOrEqual
+data JsBinOp =
+  JsBinEq
+  | JsBinNotEq
+  | JsBinStrictEq
+  | JsBinStrictNotEq
+  | JsBinGt
+  | JsBinGe
+  | JsBinLt
+  | JsBinLe
+  | JsBinAnd
+  | JsBinOr
   deriving (Eq, Ord, Show)
 
-data LogicalOperator =
-  LogicalAnd
-  | LogicalOr
-  | LogicalNot
+data JsUnaryOp =
+  JsUnaryOpNot
   deriving (Eq, Ord, Show)
 
-data Boolean =
+data JsBoolean =
   JsTrue
   | JsFalse
   deriving (Eq, Ord, Show)
-
 
 jsTrue :: Parser Chars
 jsTrue = stringTok "true"
@@ -45,79 +44,78 @@ jsTrue = stringTok "true"
 jsFalse :: Parser Chars
 jsFalse = stringTok "false"
 
-jsBoolean :: Parser Boolean
+jsBoolean :: Parser JsBoolean
 jsBoolean =
   JsTrue <$ jsTrue ||| JsFalse <$ jsFalse
 
-jsEqual = stringTok "=="
-jsNotEqual = stringTok "!="
-jsStrictEqual = stringTok "==="
-jsStrictNotEqual = stringTok "!=="
-jsGreaterThan = stringTok ">"
-jsGreaterThanOrEqual = stringTok ">="
-jsLessThan = stringTok "<"
-jsLessThanOrEqual = stringTok "<="
+jsBinEqual = stringTok "=="
+jsBinNotEqual = stringTok "!="
+jsBinStrictEqual = stringTok "==="
+jsBinStrictNotEqual = stringTok "!=="
+jsBinGreaterThan = stringTok ">"
+jsBinGreaterThanOrEqual = stringTok ">="
+jsBinLessThan = stringTok "<"
+jsBinLessThanOrEqual = stringTok "<="
+jsBinAnd = stringTok "&&"
+jsBinOr = stringTok "||"
+jsBinNot = stringTok "!"
 
-jsComparisonOperator = 
+jsBinOperator :: Parser JsBinOp
+jsBinOperator = 
   spaces *> (
-    StrictNotEqual <$ jsStrictNotEqual
-    ||| StrictEqual <$ jsStrictEqual
-    ||| NotEqual <$ jsNotEqual
-    ||| Equal <$ jsEqual
-    ||| GreaterThanOrEqual <$ jsGreaterThanOrEqual
-    ||| GreaterThan <$ jsGreaterThan
-    ||| LessThanOrEqual <$ jsLessThanOrEqual
-    ||| LessThan <$ jsLessThan
+    JsBinStrictNotEq <$ jsBinStrictNotEqual
+    ||| JsBinStrictEq <$ jsBinStrictEqual
+    ||| JsBinNotEq <$ jsBinNotEqual
+    ||| JsBinEq <$ jsBinEqual
+    ||| JsBinGe <$ jsBinGreaterThanOrEqual
+    ||| JsBinGt <$ jsBinGreaterThan
+    ||| JsBinLe <$ jsBinLessThanOrEqual
+    ||| JsBinLt <$ jsBinLessThan
+    ||| JsBinAnd <$ jsBinAnd
+    ||| JsBinOr <$ jsBinOr
   )
 
-jsLogicalAnd = stringTok "&&"
-jsLogicalOr = stringTok "||"
-jsLogicalNot = stringTok "!"
-
-jsLogicalOperator =
+jsUnaryOp :: Parser JsUnaryOp
+jsUnaryOp = 
   spaces *> (
-    LogicalAnd <$ jsLogicalAnd
-    ||| LogicalOr <$ jsLogicalOr
-    ||| LogicalNot <$ jsLogicalNot
+    JsUnaryOpNot <$ jsBinNot
   )
 
-
-data Expr (v :: [*]) =
-  Bool Boolean
-  | String --todo
-  | UniExp LogicalOperator (Expr v)
-  | BinExp LogicalOperator (Expr v) (Expr v)
+data JsExpr =
+  JsBoolExpr JsBoolean
+  | JsParenExpr JsExpr
+  | JsUnaryExpr (JsUnaryOp, JsExpr)
+  | JsBinExpr (JsExpr, JsBinOp, JsExpr)
   deriving (Eq, Ord, Show)
 
--- parse jsExpression "!true"
--- Result >< UniExp LogicalAnd (Bool JsTrue) (Bool JsTrue)
-jsUniExp :: Parser (Expr v)
-jsUniExp =
+-- parse jsUnaryExpr "!true"
+-- Result >< JsUnaryExp LogicalAnd (Bool JsTrue) (Bool JsTrue)
+jsUnaryExpr :: Parser (JsUnaryOp, JsExpr)
+jsUnaryExpr =
   do
-    o <- jsLogicalOperator
-    b <- jsBoolean
-    pure (UniExp o (Bool b))
+    o <- jsUnaryOp
+    b <- jsExpr
+    pure (o, b)
   
--- parse jsExpression "true && true"
+-- parse jsBinExpr "true && true"
 -- Result >< BinExp LogicalAnd (Bool JsTrue) (Bool JsTrue)
-jsBinExp :: Parser (Expr v)
-jsBinExp =
+-- parse jsBinExpr "true && (true || false)"
+
+jsBinExpr :: Parser (JsExpr, JsBinOp, JsExpr)
+jsBinExpr =
   do
-    b1 <- jsBoolean
+    b1 <- jsExpr
     _ <- spaces
-    o <- jsLogicalOperator -- ||| jsComparisonOperator
+    o <- jsBinOperator
     _ <- spaces
-    b2 <- jsBoolean
-    pure (BinExp o (Bool b1) (Bool b2))
+    b2 <- jsExpr
+    pure (b1, o, b2)
 
--- jsExpression :: Parser Expr
--- jsExpression =
---   do
---     b1 <- jsBoolean
---     _ <- spaces
---     o <- jsLogicalOperator
---     _ <- spaces
---     b2 <- jsBoolean
---     pure (BinExp o (Bool b1) (Bool b2))
-
-
+jsExpr :: Parser JsExpr
+jsExpr =
+  (
+    JsBoolExpr <$> jsBoolean
+    ||| JsBinExpr <$> jsBinExpr
+    ||| JsUnaryExpr <$> jsUnaryExpr
+    
+  )
