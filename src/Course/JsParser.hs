@@ -139,11 +139,9 @@ jsBinExpr =
 jsExpr :: Parser JsExpr
 jsExpr =
   (
-    JsBinExpr <$> jsBinExpr
-    |||
     JsBoolExpr <$> jsBoolean
-    ||| 
-    JsUnaryExpr <$> jsUnaryExpr
+    |||  JsBinExpr <$> jsBinExpr
+    ||| JsUnaryExpr <$> jsUnaryExpr
   )
 
 jsIfTok :: Parser Chars
